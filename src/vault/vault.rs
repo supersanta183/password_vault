@@ -1,6 +1,6 @@
 use rand::SeedableRng;
 use rsa::{pkcs8::der::zeroize::{Zeroize, Zeroizing}, RsaPublicKey};
-use rsa::{self, oaep};
+use rsa::oaep;
 use rsa_keygen;
 use std::collections::HashMap;
 use sha2::Sha256;
