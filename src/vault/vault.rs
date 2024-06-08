@@ -1,19 +1,21 @@
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use rsa::oaep;
-use rsa::{
-    pkcs8::der::zeroize::{Zeroize, Zeroizing},
-    RsaPublicKey,
-};
+use rsa::{pkcs8::der::zeroize::Zeroizing, RsaPublicKey};
 use rsa_keygen;
+use secrecy::{ExposeSecret, Secret};
 use sha2::Sha256;
 use std::collections::HashMap;
+use zeroize::Zeroize;
 
 use crate::vault::vault_errors::VaultError;
 
+type Credentials = (String, Result<Vec<u8>, rsa::Error>);
+
 pub struct Vault {
     pub_key: RsaPublicKey,
-    passwords: HashMap<String, (String, Result<Vec<u8>, rsa::Error>)>,
+    seedphrase: Option<Secret<Vec<u8>>>,
+    credentials: HashMap<String, Credentials>,
     logged_in: bool,
 }
 
@@ -36,7 +38,8 @@ impl Vault {
 
         let vault = Vault {
             pub_key: pub_key,
-            passwords: passwords,
+            seedphrase: None,
+            credentials: passwords,
             logged_in: logged_in,
         };
         return Ok(vault);
@@ -54,7 +57,8 @@ impl Vault {
 
         let vault = Vault {
             pub_key: pub_key,
-            passwords: passwords,
+            seedphrase: None,
+            credentials: passwords,
             logged_in: logged_in,
         };
         return Ok(vault);
@@ -73,13 +77,17 @@ impl Vault {
             )));
         }
 
-        println!("Logged in succesfully!");
+        let secret_seedphrase = secrecy::Secret::new((**seedphrase).clone().into_bytes());
+        self.seedphrase = Some(secret_seedphrase);
         self.logged_in = true;
+
+        println!("Logged in succesfully!");
 
         Ok(())
     }
 
     pub fn logout(&mut self) {
+        self.seedphrase = None;
         self.logged_in = false;
     }
 
@@ -99,11 +107,62 @@ impl Vault {
         password.zeroize();
 
         let user_info = (username, encrypted_password);
-        self.passwords.insert(service, user_info);
+        self.credentials.insert(service, user_info);
 
         println!("password added successfully!");
 
         Ok(())
+    }
+
+    // returns a list of the services that you have saved a password for
+    pub fn get_available_credentials(&self) -> Result<Vec<String>, VaultError> {
+        if !self.logged_in {
+            return Err(VaultError::NotLoggedInError);
+        }
+        let services = self.credentials.keys().cloned().collect();
+        Ok(services)
+    }
+
+    // returns (username, password) from a specific service. Password is encrypted
+    pub fn get_credentials_from_service(
+        &self,
+        service: String,
+    ) -> Result<&Credentials, VaultError> {
+        if !self.logged_in {
+            return Err(VaultError::NotLoggedInError);
+        }
+        let credentials = match self.credentials.get(&service) {
+            Some(credentials) => credentials,
+            None => return Err(VaultError::CredentialsMissingForServiceError(service)),
+        };
+        println!("{:?}", credentials);
+        Ok(credentials)
+    }
+
+    // decrypts the password from a specific service
+    // remember to zeroize password after use!
+    pub fn decrypt_password(
+        &self,
+        credentials: &Credentials,
+    ) -> Result<Zeroizing<String>, VaultError> {
+        if !self.logged_in {
+            return Err(VaultError::NotLoggedInError);
+        };
+        let seedphrase = self.seedphrase.as_ref().expect("no seedphrase found");
+        let seedphrase_bytes = seedphrase.expose_secret();
+        let seedphrase_string = String::from_utf8(seedphrase_bytes.to_owned()).unwrap();
+        println!("seedphrase: {}", seedphrase_string);
+
+        let (sk, _) = rsa_keygen::keypair_from_seedphrase(&Zeroizing::new(seedphrase_string))
+            .expect("failed to generate keypair from seedphrase");
+
+        let pw = credentials.1.as_ref().expect("no password found");
+        let pw_decrypted = sk
+            .decrypt(oaep::Oaep::new::<Sha256>(), pw)
+            .expect("failed to decrypt password");
+        let pw_string = Zeroizing::new(String::from_utf8(pw_decrypted).unwrap());
+
+        Ok(pw_string)
     }
 }
 
@@ -118,14 +177,14 @@ mod vault_tests {
         let seedphrase = Zeroizing::new(String::from(
             "shell unfold hollow cause layer limit cigar educate ensure weekend ridge help",
         ));
-        let mut vault = Vault::from_seedphrase(&seedphrase).expect("failed to creat vault");
+        let vault = Vault::from_seedphrase(&seedphrase).expect("failed to creat vault");
 
         (seedphrase, vault)
     }
 
     #[test]
     fn cannot_add_password_when_not_logged_in() {
-        let(_, mut vault) = create_vault();
+        let (_, mut vault) = create_vault();
 
         let service = String::from("service");
         let username = String::from("Emil");
