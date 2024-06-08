@@ -89,6 +89,8 @@ impl Vault {
     pub fn logout(&mut self) {
         self.seedphrase = None;
         self.logged_in = false;
+
+        println!("Logged out succesfully!");
     }
 
     pub fn add_password(
@@ -151,7 +153,6 @@ impl Vault {
         let seedphrase = self.seedphrase.as_ref().expect("no seedphrase found");
         let seedphrase_bytes = seedphrase.expose_secret();
         let seedphrase_string = String::from_utf8(seedphrase_bytes.to_owned()).unwrap();
-        println!("seedphrase: {}", seedphrase_string);
 
         let (sk, _) = rsa_keygen::keypair_from_seedphrase(&Zeroizing::new(seedphrase_string))
             .expect("failed to generate keypair from seedphrase");
