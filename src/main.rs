@@ -1,11 +1,6 @@
-mod keygen;
 mod vault;
 
-use rand::SeedableRng;
-use rsa_keygen;
-use rand_chacha::ChaCha20Rng;
-use rsa::{self, oaep, pkcs8::der::zeroize::Zeroizing, traits::PaddingScheme};
-use sha2::Sha256;
+use rsa::{self, pkcs8::der::zeroize::Zeroizing};
 
 use vault::vault::Vault;
 
