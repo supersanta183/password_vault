@@ -45,12 +45,14 @@ impl Vault {
         return Ok(vault);
     }
 
-    pub fn from_seedphrase(seedphrase: &Zeroizing<String>) -> Result<Vault, VaultError> {
-        let (_, pub_key) = rsa_keygen::keypair_from_seedphrase(seedphrase).map_err(|_e| {
+    pub fn from_seedphrase(mut seedphrase: Zeroizing<String>) -> Result<Vault, VaultError> {
+        let (_, pub_key) = rsa_keygen::keypair_from_seedphrase(&seedphrase).map_err(|_e| {
             VaultError::FailedToLoginError(String::from(
                 "Failed to generate keypair from seedphrase",
             ))
         })?;
+
+        seedphrase.zeroize();
 
         let passwords = HashMap::new();
         let logged_in = false;
@@ -64,7 +66,25 @@ impl Vault {
         return Ok(vault);
     }
 
-    pub fn login(&mut self, seedphrase: &Zeroizing<String>) -> Result<(), VaultError> {
+    pub fn from_password(mut password: Zeroizing<String>) -> Result<Vault, VaultError> {
+        let seedphrase = rsa_keygen::seedphrase_from_password(&password).map_err(|_e| {
+            VaultError::FailedToLoginError(String::from(
+                "Failed to generate seedphrase from password",
+            ))
+        })?;
+
+        let vault = Self::from_seedphrase(seedphrase).map_err(|_e| {
+            VaultError::FailedToGenerateVaultError(String::from(
+                "failed to generate vault from seedphrase",
+            ))
+        })?;
+        password.zeroize();
+
+        Ok(vault)
+    }
+
+    pub fn login_with_seedphrase(&mut self, seedphrase: &Zeroizing<String>) -> Result<(), VaultError> {
+        
         let (_, pub_key) = rsa_keygen::keypair_from_seedphrase(seedphrase).map_err(|_e| {
             VaultError::FailedToLoginError(String::from(
                 "Failed to generate keypair from seedphrase",
@@ -84,6 +104,19 @@ impl Vault {
         println!("Logged in succesfully!");
 
         Ok(())
+    }
+
+    pub fn login_with_password(&mut self, mut password: Zeroizing<String>) -> Result<(), VaultError> {
+        let seedphrase = rsa_keygen::seedphrase_from_password(&password).map_err(|_e| {
+            VaultError::FailedToLoginError(String::from(
+                "Failed to generate seedphrase from password",
+            ))
+        })?;
+        password.zeroize();
+
+        let res = self.login_with_seedphrase(&seedphrase);
+
+        res
     }
 
     pub fn logout(&mut self) {
@@ -178,7 +211,7 @@ mod vault_tests {
         let seedphrase = Zeroizing::new(String::from(
             "shell unfold hollow cause layer limit cigar educate ensure weekend ridge help",
         ));
-        let vault = Vault::from_seedphrase(&seedphrase).expect("failed to creat vault");
+        let vault = Vault::from_seedphrase(seedphrase.clone()).expect("failed to creat vault");
 
         (seedphrase, vault)
     }
@@ -203,7 +236,7 @@ mod vault_tests {
     fn can_add_password_when_logged_in() {
         let (seedphrase, mut vault) = create_vault();
 
-        let res = vault.login(&seedphrase);
+        let res = vault.login_with_seedphrase(&seedphrase);
         assert!(!res.is_err());
 
         let service = String::from("service");

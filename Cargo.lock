@@ -340,15 +340,17 @@ dependencies = [
 
 [[package]]
 name = "rsa_keygen"
-version = "1.0.7"
+version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e06423fc9db55e61081549e2b1e9f61b2e16c99ad9b44deafdb588bd32f90e1"
+checksum = "1092e49490381bdb1793548d7c4c6f8100e2815dc4be0374cacdc15d92ce5bb9"
 dependencies = [
  "arrayref",
  "rand",
  "rand_chacha",
  "rsa",
+ "sha2",
  "tiny-bip39",
+ "zeroize",
 ]
 
 [[package]]
