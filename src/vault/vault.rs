@@ -216,6 +216,13 @@ mod vault_tests {
         (seedphrase, vault)
     }
 
+    fn create_vault_with_password() -> (Zeroizing<String>, Vault) {
+        let password = Zeroizing::new(String::from("emil er sej"));
+        let vault = Vault::from_password(password.clone()).expect("failed to create vault");
+
+        (password, vault)
+    }
+
     #[test]
     fn cannot_add_password_when_not_logged_in() {
         let (_, mut vault) = create_vault();
@@ -245,5 +252,112 @@ mod vault_tests {
         let add_password = vault.add_password(service, username, password);
 
         assert!(!add_password.is_err());
+    }
+
+    #[test]
+    fn can_login_with_seedphrase() {
+        let (seedphrase, mut vault) = create_vault();
+
+        let res = vault.login_with_seedphrase(&seedphrase);
+        assert!(!res.is_err());
+    }
+
+    #[test]
+    fn can_login_with_password() {
+        let (password, mut vault) = create_vault_with_password();
+
+        let res = vault.login_with_password(password);
+        assert!(!res.is_err());
+    }
+
+    #[test]
+    fn can_logout() {
+        let (seedphrase, mut vault) = create_vault();
+
+        let res = vault.login_with_seedphrase(&seedphrase);
+        assert!(!res.is_err());
+        assert_eq!(vault.logged_in, true);
+
+        vault.logout();
+
+        assert_eq!(vault.logged_in, false);
+    }
+
+    #[test]
+    fn can_get_available_credentials() {
+        let (seedphrase, mut vault) = create_vault();
+
+        let res = vault.login_with_seedphrase(&seedphrase);
+        assert!(!res.is_err());
+
+        let service = String::from("service");
+        let username = String::from("Emil");
+        let password = Zeroizing::new(String::from("password"));
+        let add_password = vault.add_password(service, username, password);
+
+        assert!(!add_password.is_err());
+
+        let available_credentials = vault.get_available_credentials();
+        assert!(!available_credentials.is_err());
+        assert_eq!(available_credentials.unwrap(), vec![String::from("service")]);
+    }
+
+    #[test]
+    fn can_get_credentials_from_service() {
+        let (seedphrase, mut vault) = create_vault();
+
+        let res = vault.login_with_seedphrase(&seedphrase);
+        assert!(!res.is_err());
+
+        let service = String::from("service");
+        let username = String::from("Emil");
+        let password = Zeroizing::new(String::from("password"));
+        let add_password = vault.add_password(service.clone(), username, password);
+
+        assert!(!add_password.is_err());
+
+        let credentials = vault.get_credentials_from_service(service);
+        assert!(!credentials.is_err());
+    }
+
+    #[test]
+    fn cannot_get_credentials_from_service_when_not_logged_in() {
+        let (seedphrase, mut vault) = create_vault();
+
+        let res = vault.login_with_seedphrase(&seedphrase);
+        assert!(!res.is_err());
+
+        let service = String::from("service");
+        let username = String::from("Emil");
+        let password = Zeroizing::new(String::from("password"));
+        let add_password = vault.add_password(service.clone(), username, password);
+
+        assert!(!add_password.is_err());
+
+        vault.logout();
+
+        let credentials = vault.get_credentials_from_service(service);
+        assert!(credentials.is_err());
+    }
+
+    #[test]
+    fn can_decrypt_password() {
+        let (seedphrase, mut vault) = create_vault();
+
+        let res = vault.login_with_seedphrase(&seedphrase);
+        assert!(!res.is_err());
+
+        let service = String::from("service");
+        let username = String::from("Emil");
+        let password = Zeroizing::new(String::from("password"));
+        let add_password = vault.add_password(service.clone(), username, password);
+
+        assert!(!add_password.is_err());
+
+        let credentials = vault.get_credentials_from_service(service).unwrap();
+        let decrypted_password = vault.decrypt_password(credentials);
+
+        assert!(!decrypted_password.is_err());
+        assert_eq!(decrypted_password.unwrap(), Zeroizing::new(String::from("password")));
     }
 }
