@@ -174,7 +174,6 @@ impl Vault {
             Some(credentials) => credentials,
             None => return Err(VaultError::CredentialsMissingForServiceError(service)),
         };
-        println!("{:?}", credentials);
         Ok(credentials)
     }
 
