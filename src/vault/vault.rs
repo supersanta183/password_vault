@@ -10,7 +10,7 @@ use zeroize::Zeroize;
 
 use crate::vault::vault_errors::VaultError;
 
-type Credentials = (String, Result<Vec<u8>, rsa::Error>);
+type Credentials = (String, Vec<u8>);
 
 pub struct Vault {
     pub_key: RsaPublicKey,
@@ -138,7 +138,11 @@ impl Vault {
 
         let padding = oaep::Oaep::new::<Sha256>();
         let mut rng = ChaCha20Rng::from_entropy();
-        let encrypted_password = self.pub_key.encrypt(&mut rng, padding, password.as_bytes());
+        let encrypted_password = self.pub_key.encrypt(&mut rng, padding, password.as_bytes()).map_err(|_e| {
+            VaultError::FailedToAddPasswordError(String::from(
+                "Failed to encrypt password",
+            ))
+        })?;
         password.zeroize();
 
         let user_info = (username, encrypted_password);
@@ -190,7 +194,7 @@ impl Vault {
         let (sk, _) = rsa_keygen::keypair_from_seedphrase(&Zeroizing::new(seedphrase_string))
             .expect("failed to generate keypair from seedphrase");
 
-        let pw = credentials.1.as_ref().expect("no password found");
+        let pw = credentials.1.as_ref();
         let pw_decrypted = sk
             .decrypt(oaep::Oaep::new::<Sha256>(), pw)
             .expect("failed to decrypt password");
@@ -359,5 +363,25 @@ mod vault_tests {
 
         assert!(!decrypted_password.is_err());
         assert_eq!(decrypted_password.unwrap(), Zeroizing::new(String::from("password")));
+    }
+
+    #[test]
+    fn decrypted_password_is_same_as_original() {
+        let (seedphrase, mut vault) = create_vault();
+
+        let res = vault.login_with_seedphrase(&seedphrase);
+        assert!(!res.is_err());
+
+        let service = String::from("service");
+        let username = String::from("Emil");
+        let password = Zeroizing::new(String::from("password"));
+        let add_password = vault.add_password(service.clone(), username, password.clone());
+
+        assert!(!add_password.is_err());
+
+        let credentials = vault.get_credentials_from_service(service).unwrap();
+        let decrypted_password = vault.decrypt_password(credentials).unwrap();
+
+        assert_eq!(decrypted_password, password);
     }
 }

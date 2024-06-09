@@ -7,6 +7,7 @@ pub enum VaultError {
     CredentialsMissingForServiceError(String),
     FailedToLoginError(String),
     FailedToGenerateVaultError(String),
+    FailedToAddPasswordError(String),
 }
 
 impl fmt::Display for VaultError {
@@ -16,6 +17,7 @@ impl fmt::Display for VaultError {
             VaultError::CredentialsMissingForServiceError(msg) => write!(f, "No credentials for service {}", msg),
             VaultError::FailedToLoginError(msg) => write!(f, "Failed to login error {}", msg),
             VaultError::FailedToGenerateVaultError(msg) => write!(f, "Failed to generate new Vault {}", msg),
+            VaultError::FailedToAddPasswordError(msg) => write!(f, "Failed to add password to vault {}", msg),
         }
     }
 }
