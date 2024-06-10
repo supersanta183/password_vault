@@ -4,13 +4,17 @@ use rsa::oaep;
 use rsa::{pkcs8::der::zeroize::Zeroizing, RsaPublicKey};
 use rsa_keygen;
 use secrecy::{ExposeSecret, Secret};
-use sha2::Sha256;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use zeroize::Zeroize;
 
+use crate::vault::helper_functions::{hash_password, sign_with_pss};
 use crate::vault::vault_errors::VaultError;
 
-type Credentials = (String, Vec<u8>);
+use super::helper_functions::verify_with_pss;
+
+// username, encrypted password, signature
+type Credentials = (String, Vec<u8>, Vec<u8>);
 
 pub struct Vault {
     pub_key: RsaPublicKey,
@@ -133,7 +137,7 @@ impl Vault {
         mut password: Zeroizing<String>,
     ) -> Result<(), VaultError> {
         if !self.logged_in {
-            return Err(VaultError::NotLoggedInError);
+            return Err(VaultError::NotLoggedInError(String::new()));
         }
 
         let padding = oaep::Oaep::new::<Sha256>();
@@ -145,7 +149,20 @@ impl Vault {
         })?;
         password.zeroize();
 
-        let user_info = (username, encrypted_password);
+        let seedphrase = match self.get_seedphrase() {
+            Some(seedphrase) => seedphrase,
+            None => return Err(VaultError::FailedToLoginError(String::from("no seedphrase found"))),
+        };
+        let (priv_key, _) = rsa_keygen::keypair_from_seedphrase(&Zeroizing::new(seedphrase))
+            .expect("failed to generate keypair from seedphrase");
+        
+        // sign the encrypted password
+        let hashed_data = hash_password(encrypted_password.clone());
+        let signature = sign_with_pss(priv_key, hashed_data).map_err(|err| {
+            VaultError::FailedToAddPasswordError(err)
+        })?;
+        
+        let user_info = (username, encrypted_password, signature);
         self.credentials.insert(service, user_info);
 
         println!("password added successfully!");
@@ -156,7 +173,7 @@ impl Vault {
     // returns a list of the services that you have saved a password for
     pub fn get_available_credentials(&self) -> Result<Vec<String>, VaultError> {
         if !self.logged_in {
-            return Err(VaultError::NotLoggedInError);
+            return Err(VaultError::NotLoggedInError(String::new()));
         }
         let services = self.credentials.keys().cloned().collect();
         Ok(services)
@@ -168,7 +185,7 @@ impl Vault {
         service: String,
     ) -> Result<&Credentials, VaultError> {
         if !self.logged_in {
-            return Err(VaultError::NotLoggedInError);
+            return Err(VaultError::NotLoggedInError(String::new()));
         }
         let credentials = match self.credentials.get(&service) {
             Some(credentials) => credentials,
@@ -184,22 +201,41 @@ impl Vault {
         credentials: &Credentials,
     ) -> Result<Zeroizing<String>, VaultError> {
         if !self.logged_in {
-            return Err(VaultError::NotLoggedInError);
+            return Err(VaultError::NotLoggedInError(String::new()));
         };
-        let seedphrase = self.seedphrase.as_ref().expect("no seedphrase found");
-        let seedphrase_bytes = seedphrase.expose_secret();
-        let seedphrase_string = String::from_utf8(seedphrase_bytes.to_owned()).unwrap();
+        let seedphrase = match self.get_seedphrase() {
+            Some(seedphrase) => seedphrase,
+            None => return Err(VaultError::FailedToLoginError(String::from("no seedphrase found"))),
+        };
 
-        let (sk, _) = rsa_keygen::keypair_from_seedphrase(&Zeroizing::new(seedphrase_string))
+        let (sk, pk) = rsa_keygen::keypair_from_seedphrase(&Zeroizing::new(seedphrase))
             .expect("failed to generate keypair from seedphrase");
 
-        let pw = credentials.1.as_ref();
+        let signature = &credentials.2;
+        let pw = &credentials.1;
+        let hashed_data = hash_password(pw.clone());
+        verify_with_pss(pk, hashed_data, signature.clone()).map_err(|err| {
+            VaultError::FailedToDecryptError(err)
+        })?;
+
         let pw_decrypted = sk
-            .decrypt(oaep::Oaep::new::<Sha256>(), pw)
+            .decrypt(oaep::Oaep::new::<Sha256>(), &pw)
             .expect("failed to decrypt password");
         let pw_string = Zeroizing::new(String::from_utf8(pw_decrypted).unwrap());
 
         Ok(pw_string)
+    }
+
+    pub fn get_seedphrase(&self) -> Option<String> {
+        let seedphrase = self.seedphrase.as_ref().expect("no seedphrase found");
+        let seedphrase_bytes = seedphrase.expose_secret();
+        let seedphrase_string = String::from_utf8(seedphrase_bytes.to_owned());
+
+        match seedphrase_string {
+            Ok(seedphrase) => Some(seedphrase),
+            Err(_) => None,
+        }
+
     }
 }
 
@@ -238,7 +274,7 @@ mod vault_tests {
         assert!(add_password.is_err());
 
         if let Err(e) = add_password {
-            assert_eq!(e, VaultError::NotLoggedInError)
+            assert_eq!(e, VaultError::NotLoggedInError(String::new()))
         }
     }
 
