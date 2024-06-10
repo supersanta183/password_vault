@@ -13,7 +13,8 @@ pub fn sign_with_pss(sk: RsaPrivateKey, hashed_data: Vec<u8>)-> Result<Vec<u8>, 
 }
 
 pub fn verify_with_pss(pk: rsa::RsaPublicKey, hashed_data: Vec<u8>, signature: Vec<u8>) -> Result<(), String> {
-    pk.verify(rsa::Pss::new::<Sha256>(), &hashed_data, &signature).map_err(|e| e.to_string())
+    pk.verify(rsa::Pss::new::<Sha256>(), &hashed_data, &signature)
+        .map_err(|e| e.to_string())
 }
 
 pub fn hash_password(password: Vec<u8>) -> Vec<u8> {
