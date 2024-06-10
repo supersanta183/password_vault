@@ -25,5 +25,5 @@ fn main() {
 
     vault.get_available_credentials();
     let x = vault.get_credentials_from_service(String::from("youtube")).unwrap();
-    vault2.decrypt_password(x).unwrap();
+    println!("{:?}", vault.decrypt_password(x).unwrap());
 }

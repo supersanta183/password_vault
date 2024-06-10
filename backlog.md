@@ -1,3 +1,4 @@
 - More tests
 - Add possibility for more than one password for same service
 - Add posibility for passwords to be saved even when program is shut down
+- Add vault interface, to more easily interact with the vault without manually having to zerorize passwords etc.

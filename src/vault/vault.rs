@@ -169,6 +169,12 @@ impl Vault {
         Ok(())
     }
 
+    // TODO
+    // updates the credentials for an already saved username for a service
+    fn update_password() {
+        unimplemented!();
+    }
+
     // returns a list of the services that you have saved a password for
     pub fn get_available_credentials(&self) -> Result<Vec<String>, VaultError> {
         if !self.logged_in {

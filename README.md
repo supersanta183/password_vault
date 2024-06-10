@@ -13,3 +13,4 @@ Current functionality:
 future functionality:
 - possibility for more than one password for each service
 - possibility to save passwords even when program is shut down
+- vault interface that makes it easy to interact with the vault
