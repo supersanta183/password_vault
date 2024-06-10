@@ -1,4 +1,4 @@
 - Add signatures to passwords
 - More tests
 - Add possibility for more than one password for same service
-- Add password generator
+- Add posibility for passwords to be saved even when program is shut down

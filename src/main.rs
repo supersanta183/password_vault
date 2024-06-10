@@ -6,11 +6,6 @@ use vault::vault::Vault;
 use password_generator::password_generator::PasswordGenerator;
 
 fn main() {
-    let mut pwgen = PasswordGenerator::new();
-    pwgen.print_settings();
-    pwgen.generate_password();
-
-
     let seedphrase = Zeroizing::new(String::from("shell unfold hollow cause layer limit cigar educate ensure weekend ridge help"));
     let password = Zeroizing::new(String::from("emil er sej"));
     //let mut vault = Vault::from_seedphrase(seedphrase.clone()).expect("failed to creat vault");

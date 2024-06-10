@@ -12,3 +12,4 @@ Current functionality:
 future functionality:
 - possibility for more than one password for each service
 - signatures for encrypted passwords, so Oliver doesn't mess with it
+- possibility to save passwords even when program is shut down
