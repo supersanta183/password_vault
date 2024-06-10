@@ -17,7 +17,7 @@ use super::helper_functions::verify_with_pss;
 type Credentials = (String, Vec<u8>, Vec<u8>);
 
 pub struct Vault {
-    pub_key: RsaPublicKey,
+    pk: RsaPublicKey,
     seedphrase: Option<Secret<Vec<u8>>>,
     credentials: HashMap<String, Credentials>,
     logged_in: bool,
@@ -25,7 +25,7 @@ pub struct Vault {
 
 impl Vault {
     pub fn new() -> Result<Vault, VaultError> {
-        let (mut seedprase, (_, pub_key)) = rsa_keygen::generate_seedphrase_and_keypair()
+        let (mut seedprase, (_, pk)) = rsa_keygen::generate_seedphrase_and_keypair()
             .map_err(|err| err.to_string())
             .map_err(|_e| {
                 VaultError::FailedToGenerateVaultError(String::from(
@@ -41,16 +41,16 @@ impl Vault {
         let logged_in = false;
 
         let vault = Vault {
-            pub_key: pub_key,
+            pk,
             seedphrase: None,
             credentials: passwords,
-            logged_in: logged_in,
+            logged_in,
         };
         return Ok(vault);
     }
 
     pub fn from_seedphrase(mut seedphrase: Zeroizing<String>) -> Result<Vault, VaultError> {
-        let (_, pub_key) = rsa_keygen::keypair_from_seedphrase(&seedphrase).map_err(|_e| {
+        let (_, pk) = rsa_keygen::keypair_from_seedphrase(&seedphrase).map_err(|_e| {
             VaultError::FailedToLoginError(String::from(
                 "Failed to generate keypair from seedphrase",
             ))
@@ -62,10 +62,10 @@ impl Vault {
         let logged_in = false;
 
         let vault = Vault {
-            pub_key: pub_key,
+            pk,
             seedphrase: None,
             credentials: passwords,
-            logged_in: logged_in,
+            logged_in,
         };
         return Ok(vault);
     }
@@ -89,13 +89,13 @@ impl Vault {
 
     pub fn login_with_seedphrase(&mut self, seedphrase: &Zeroizing<String>) -> Result<(), VaultError> {
         
-        let (_, pub_key) = rsa_keygen::keypair_from_seedphrase(seedphrase).map_err(|_e| {
+        let (_, pk) = rsa_keygen::keypair_from_seedphrase(seedphrase).map_err(|_e| {
             VaultError::FailedToLoginError(String::from(
                 "Failed to generate keypair from seedphrase",
             ))
         })?;
 
-        if pub_key != self.pub_key {
+        if pk != self.pk {
             return Err(VaultError::FailedToLoginError(String::from(
                 "wrong seedphrase",
             )));
@@ -142,7 +142,7 @@ impl Vault {
 
         let padding = oaep::Oaep::new::<Sha256>();
         let mut rng = ChaCha20Rng::from_entropy();
-        let encrypted_password = self.pub_key.encrypt(&mut rng, padding, password.as_bytes()).map_err(|_e| {
+        let encrypted_password = self.pk.encrypt(&mut rng, padding, password.as_bytes()).map_err(|_e| {
             VaultError::FailedToAddPasswordError(String::from(
                 "Failed to encrypt password",
             ))
@@ -153,12 +153,12 @@ impl Vault {
             Some(seedphrase) => seedphrase,
             None => return Err(VaultError::FailedToLoginError(String::from("no seedphrase found"))),
         };
-        let (priv_key, _) = rsa_keygen::keypair_from_seedphrase(&Zeroizing::new(seedphrase))
+        let (sk, _) = rsa_keygen::keypair_from_seedphrase(&Zeroizing::new(seedphrase))
             .expect("failed to generate keypair from seedphrase");
         
         // sign the encrypted password
         let hashed_data = hash_password(encrypted_password.clone());
-        let signature = sign_with_pss(priv_key, hashed_data).map_err(|err| {
+        let signature = sign_with_pss(sk, hashed_data).map_err(|err| {
             VaultError::FailedToAddPasswordError(err)
         })?;
         
